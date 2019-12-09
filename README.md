@@ -1,4 +1,4 @@
-# SDAE: ML4ART FORK
+# SDAE - ML4ART FORK
 
 ### Setup
 
@@ -8,22 +8,14 @@ Install [PyTorch](https://pytorch.org/get-started/locally/), NumPy, and
 pip install -r requirements.txt
 ```
 
-There is one dataset you'll need to download manually (see below).
-I suggest you create a `data` folder and unpack the relevant files into it.
-Later, you will be able to specify the dataset path as a command line argument.
-
-<table>
-  <tr>
-    <td>RESISC45</td>
-    <td><a href="http://www.escience.cn/people/JunweiHan/NWPU-RESISC45.html">Link</a></td>
-  </tr>
-</table>
+Download the [RESISC45 dataset](http://www.escience.cn/people/JunweiHan/NWPU-RESISC45.html)
+and place it in the `data` folder. The final path should be `sdae/data/NWPU-RESISC45`.
 
 ### Usage
 
 Train the denoising variational autoencoder:
 ```
-python3 sdae.py \
+python3 train.py \
     --batch_size 128 \
     --learning_rate 0.001 \
     --num_epochs 50 \

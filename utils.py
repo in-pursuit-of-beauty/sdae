@@ -9,17 +9,7 @@ import matplotlib.pyplot as plt
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
-from datasets import OlshausenDataset, MNISTVariant, \
-    CUB2011Dataset, CIFAR10Dataset, InterpolationDataset
-
-
-def is_iterable(x):
-    """Source: https://stackoverflow.com/a/1952481."""
-    try:
-        iter(x)
-        return True
-    except TypeError:
-        return False
+from datasets import RESISC45Dataset
 
 
 def product(iterable):
@@ -64,54 +54,6 @@ def salt_and_pepper(x, sp_frac, minval=0.0, maxval=1.0):
     return x_sp, torch.clamp(min_idxs + max_idxs, 0, 1)
 
 
-def plot_first_layer_weights(model, weight_h=None, weight_w=None, block_on_viz=False):
-    weights = model.get_first_layer_weights()
-    print('shape of first-layer weights: %r' % (weights.shape,))
-
-    if len(weights.shape) == 4:
-        # weights for convolutional layer
-        n, c, h, w = weights.shape
-        weights = np.reshape(weights, (n * c, h, w))
-
-    if not block_on_viz:
-        plt.ion()
-        plt.show()
-
-    n = weights.shape[0]
-    if n < 50:
-        nrows = int(np.sqrt(n))
-        ncols = int(np.ceil(n // nrows))
-    else:
-        nrows, ncols = 5, 10
-    fig, ax = plt.subplots(nrows, ncols)
-
-    if nrows == 1 and ncols == 1:
-        ax = [[ax]]
-    elif nrows == 1:
-        ax = [[col for col in ax]]
-    elif ncols == 1:
-        ax = [[row] for row in ax]
-
-    i = 0
-    for row in ax:
-        for col in row:
-            weight = weights[i]
-            if len(weight.shape) == 1:
-                if not weight_h or not weight_w:
-                    # infer height and width of weight, assuming it is square
-                    weight_h = weight_w = int(np.sqrt(weight.size))
-                weight = np.reshape(weight, (weight_h, weight_w))
-            col.imshow(weight, cmap='gray')
-            col.axis('off')
-            i += 1
-
-    if not block_on_viz:
-        plt.pause(10)
-        plt.close()
-    else:
-        plt.show()
-
-
 def save_image_wrapper(img, filepath):
     save_image(img, filepath)
     print('[o] saved image to %s' % filepath)
@@ -145,63 +87,15 @@ def init_loss(loss_type, **loss_kwargs):
     return Loss(**loss_kwargs)
 
 
-def init_data_loader(dataset_key,
-                     train_ver=True,
-                     batch_size=128,
-                     olshausen_path=None,
-                     olshausen_step_size=1,
-                     cub_folder=None):
-
+def init_data_loader(dataset_key, batch_size=128, dataset_path=None):
     dataset_key = dataset_key.lower()
-    if dataset_key.startswith('mnist') \
-            or dataset_key in MNISTVariant.variant_options:
-        # MNIST or MNIST variant
-        img_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Lambda(normalize),
-        ])
-        variant = None if dataset_key == 'mnist' else dataset_key
-        dataset = MNISTVariant('./data',
-                               train=train_ver,
-                               transform=img_transform,
-                               download=True,
-                               variant=variant)
-        sample_c, sample_h, sample_w = 1, 28, 28
-    elif dataset_key.startswith('olshausen'):
-        # Olshausen natural scenes
-        dataset = OlshausenDataset(olshausen_path,
-                                   patch_size=12,
-                                   step_size=olshausen_step_size,
-                                   normalize=False)
-        sample_c, sample_h, sample_w = 1, 12, 12
-    elif dataset_key.startswith('cub'):
-        # CUB birds
-        dataset = CUB2011Dataset(cub_folder,
-                                 train=train_ver,
-                                 normalize=False)
-        sample_c = 3
-        sample_h = CUB2011Dataset.RESIZE_H
-        sample_w = CUB2011Dataset.RESIZE_W
-    elif dataset_key == 'cifar10':
-        # CIFAR-10
-        img_transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Lambda(normalize),
-        ])
-        dataset = CIFAR10Dataset('./data',
-                                 train=train_ver,
-                                 transform=img_transform,
-                                 download=True)
-        sample_c, sample_h, sample_w = 3, 32, 32
-    elif dataset_key.startswith('interp'):
-        # Toy grayscale interpolation dataset
-        dataset = InterpolationDataset('./data',
-                                       normalize=True)
-        sample_c = 1
-        sample_h, sample_w = dataset.sample_h, dataset.sample_w
+    if dataset_key.startswith('resisc'):
+        # RESISC45
+        dataset = RESISC45Dataset(dataset_path, normalize=False)
+        c, h, w = dataset.get_data_dims()
     else:
         raise ValueError('unrecognized dataset: %s' % dataset_key)
     data_minval = dataset.get_minval()
     data_maxval = dataset.get_maxval()
     data_loader = DataLoader(dataset, batch_size, shuffle=True)
-    return data_loader, sample_c, sample_h, sample_w, data_minval, data_maxval
+    return data_loader, c, h, w, data_minval, data_maxval

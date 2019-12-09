@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import is_iterable, product
 
 
 class Flatten(nn.Module):
@@ -10,258 +9,13 @@ class Flatten(nn.Module):
         return x.view(x.size(0), -1)
 
 
-# ====================
-# REGULAR AUTOENCODERS
-# ====================
+class Reshape(nn.Module):
+    def __init__(self, c, h, w):
+        super(Reshape, self).__init__()
+        self.shape = (c, h, w)
 
-
-class SAE(nn.Module):
-    """Stacked autoencoder."""
-
-    def __init__(self):
-        super(SAE, self).__init__()
-
-        self.encoders = nn.ModuleList([])
-        self.decoders = nn.ModuleList([])
-
-        self.num_trained_blocks = 0
-        self.is_convolutional = False
-
-    def forward(self, x, ae_idx=None):
-        x = self.encode(x, ae_idx)
-        x = self.decode(x, ae_idx)
-        return x
-
-    @property
-    def num_blocks(self):
-        return len(self.encoders)
-
-    def get_first_layer_weights(self, as_tensor=False):
-        if as_tensor:
-            return self.encoders[0][0].weight.data.cpu()
-        return self.encoders[0][0].weight.data.cpu().numpy()
-
-    def get_block_parameters(self, ae_idx):
-        """Get parameters corresponding to a particular block."""
-        return list(self.encoders[ae_idx].parameters()) + \
-               list(self.decoders[self.num_blocks-ae_idx-1].parameters())
-
-    def get_enc_out_features(self, ae_idx):
-        """Get the output dimensionality of the "AE_IDX"-th encoder.
-        To get the output dimensionality of the final encoder, pass -1 as AE_IDX."""
-        enc_out_features = None
-        for module in self.encoders[ae_idx]:
-            if hasattr(module, 'out_features'):
-                enc_out_features = module.out_features
-        return enc_out_features
-
-    def encode(self, x, ae_idx=None):
-        """Encode the input. If AE_IDX is provided,
-        encode with that particular encoder only."""
-        if ae_idx is None:
-            for i in range(self.num_trained_blocks):
-                x = self.encoders[i](x)
-        else:
-            x = self.encoders[ae_idx](x)
-        return x
-
-    def decode(self, x, ae_idx=None):
-        """Decode the input. If AE_IDX is provided,
-        decode with that particular decoder only."""
-        if ae_idx is None:
-            start = self.num_blocks - self.num_trained_blocks
-            for i in range(start, self.num_blocks):
-                x = self.decoders[i](x)
-        else:
-            x = self.decoders[self.num_blocks-ae_idx-1](x)
-        return x
-
-
-class MNISTCAE(SAE):
-    """MNIST convolutional autoencoder."""
-
-    def __init__(self):
-        super(MNISTCAE, self).__init__()
-
-        self.encoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=3, padding=1),
-                nn.ReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.Conv2d(in_channels=16, out_channels=8, kernel_size=3, stride=2, padding=1),
-                nn.Sigmoid(),
-                nn.MaxPool2d(kernel_size=2, stride=1),  # shape: (batch, 8, 2, 2)
-            ),
-        ])
-        self.decoders = nn.ModuleList([
-            nn.Sequential(
-                nn.ConvTranspose2d(in_channels=8, out_channels=16, kernel_size=3, stride=2),
-                nn.ReLU(),
-                nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=5, stride=3, padding=1),
-                nn.ReLU(),
-                nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=2, stride=2, padding=1),
-                nn.Sigmoid(),
-            ),
-        ])
-        self.is_convolutional = True
-
-    def get_enc_out_features(self, ae_idx):
-        _enc_out_features = [(8, 2, 2)]
-        return _enc_out_features[ae_idx]
-
-
-class MNISTCAE2(SAE):
-    """MNIST stacked convolutional autoencoder (two blocks)."""
-
-    def __init__(self):
-        super(MNISTCAE2, self).__init__()
-
-        self.encoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(in_channels=1, out_channels=8, kernel_size=7, stride=1, padding=3),
-                nn.ReLU(),
-                nn.Conv2d(in_channels=8, out_channels=16, kernel_size=7, stride=1, padding=3),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 16, 14, 14)
-                nn.Sigmoid(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(in_channels=16, out_channels=16, kernel_size=5, stride=1, padding=2),
-                nn.ReLU(),
-                nn.Conv2d(in_channels=16, out_channels=16, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 16, 7, 7)
-                nn.Sigmoid(),
-            ),
-        ])
-        self.decoders = nn.ModuleList([
-            nn.Sequential(
-                nn.ConvTranspose2d(in_channels=16, out_channels=16, kernel_size=2, stride=2),
-                nn.ReLU(),
-                nn.Conv2d(in_channels=16, out_channels=16, kernel_size=5, stride=1, padding=2),
-                nn.Sigmoid(),
-            ),
-            nn.Sequential(
-                nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=2, stride=2),
-                nn.ReLU(),
-                nn.Conv2d(in_channels=8, out_channels=1, kernel_size=7, stride=1, padding=3),
-                nn.Sigmoid(),
-            ),
-        ])
-        self.is_convolutional = True
-
-    def get_enc_out_features(self, ae_idx):
-        _enc_out_features = [(16, 14, 14), (16, 7, 7)]
-        return _enc_out_features[ae_idx]
-
-
-class CUBCAE2(SAE):
-    """CUB stacked convolutional autoencoder (two blocks)."""
-
-    def __init__(self):
-        super(CUBCAE2, self).__init__()
-
-        # shape: (batch, 3, 128, 128)
-        self.encoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(in_channels=3, out_channels=8, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 8, 64, 64)
-                nn.ReLU(),
-                nn.Conv2d(in_channels=8, out_channels=16, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 16, 32, 32)
-                nn.ReLU(),
-                nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 32, 16, 16)
-                nn.ReLU(),
-            ),
-            nn.Sequential(
-                nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 64, 8, 8)
-                nn.ReLU(),
-                nn.Conv2d(in_channels=64, out_channels=128, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 128, 4, 4)
-                nn.ReLU(),
-                nn.Conv2d(in_channels=128, out_channels=256, kernel_size=5, stride=1, padding=2),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 256, 2, 2)
-                nn.ReLU(),
-            ),
-        ])
-        self.decoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(2),
-                nn.Conv2d(in_channels=256, out_channels=128, kernel_size=5, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 128, 4, 4)
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(2),
-                nn.Conv2d(in_channels=128, out_channels=64, kernel_size=5, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 64, 8, 8)
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(2),
-                nn.Conv2d(in_channels=64, out_channels=32, kernel_size=5, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 32, 16, 16)
-            ),
-            nn.Sequential(
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(2),
-                nn.Conv2d(in_channels=32, out_channels=16, kernel_size=5, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 16, 32, 32)
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(2),
-                nn.Conv2d(in_channels=16, out_channels=8, kernel_size=5, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 8, 64, 64)
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(2),
-                nn.Conv2d(in_channels=8, out_channels=3, kernel_size=5, stride=1, padding=0),
-                # shape: (batch, 3, 128, 128)
-            ),
-        ])
-        self.is_convolutional = True
-
-    def get_enc_out_features(self, ae_idx):
-        _enc_out_features = [(32, 16, 16), (256, 2, 2)]
-        return _enc_out_features[ae_idx]
-
-
-class CIFARCAE(SAE):
-    """CIFAR-10 stacked convolutional autoencoder."""
-
-    def __init__(self):
-        super(CIFARCAE, self).__init__()
-
-        # shape: (batch, 3, 32, 32)
-        self.encoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Conv2d(in_channels=3, out_channels=8, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 8, 16, 16)
-                nn.ReLU(),
-                nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 16, 8, 8)
-                nn.ReLU(),
-                nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1),
-                nn.MaxPool2d(kernel_size=2, stride=2),  # shape: (batch, 32, 4, 4)
-                nn.ReLU(),
-            ),
-        ])
-        self.decoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(1),
-                nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 16, 8, 8)
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(1),
-                nn.Conv2d(in_channels=16, out_channels=8, kernel_size=3, stride=1, padding=0),
-                nn.ReLU(),  # shape: (batch, 8, 16, 16)
-                nn.Upsample(scale_factor=2, mode='nearest'),
-                nn.ReflectionPad2d(1),
-                nn.Conv2d(in_channels=8, out_channels=3, kernel_size=3, stride=1, padding=0),
-                # shape: (batch, 3, 32, 32)
-            ),
-        ])
-        self.is_convolutional = True
-
-    def get_enc_out_features(self, ae_idx):
-        _enc_out_features = [(32, 4, 4)]
-        return _enc_out_features[ae_idx]
+    def forward(self, x):
+        return x.view(x.size(0), *self.shape)
 
 
 # ========================
@@ -269,40 +23,52 @@ class CIFARCAE(SAE):
 # ========================
 
 
-class SVAE(SAE):
-    """Stacked variational autoencoder."""
+class CVAE(nn.Module):
+    """Convolutional variational autoencoder.
+    Based on https://www.tensorflow.org/tutorials/generative/cvae.
+    """
 
-    def __init__(self):
-        super(SVAE, self).__init__()
+    def __init__(self, latent_dim):
+        super(CVAE, self).__init__()
+        self.latent_dim = latent_dim
+        self.is_convolutional = True
 
-        self.mean_estimators = nn.ModuleList([])
-        self.log_var_estimators = nn.ModuleList([])
+        # shape: (batch, 1, 256, 256)
+        self.encoder = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=2, padding=0),
+            nn.ReLU(),  # shape: (batch, 16, 124, 124)
+            nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, stride=2, padding=0),
+            nn.ReLU(),  # shape: (batch, 32, 58, 58)
+            Flatten(),  # shape: (batch, 32 * 58 * 58)
+            nn.Linear(32 * 58 * 58, latent_dim * 2),
+        )
+        self.mean_estimator = nn.Linear(
+            in_features=latent_dim*2, out_features=latent_dim)
+        self.log_var_estimator = nn.Linear(
+            in_features=latent_dim*2, out_features=latent_dim)
+        # shape: (batch, latent_dim)
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, 16 * 64 * 64),
+            nn.ReLU(),
+            Reshape(16, 64, 64),
+            nn.ConvTranspose2d(in_channels=16, out_channels=16, kernel_size=5, stride=2, padding=0),
+            nn.ReLU(),  # shape: (batch, 16, 128, 128)
+            nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=5, stride=2, padding=0),
+            nn.ReLU(),  # shape: (batch, 8, 256, 256)
+            nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=5, stride=1, padding=0),
+            nn.Sigmoid(),
+        )
+        # shape: (batch, 1, 256, 256)
 
-    def forward(self, x, ae_idx=None):
-        z, mean, log_var = self.encode(x, ae_idx)
-        return self.decode(z, ae_idx), mean, log_var
+    def forward(self, x):
+        z, mean, log_var = self.encode(x)
+        return self.decode(z), mean, log_var
 
-    def get_enc_out_features(self, ae_idx):
-        enc_out_features = None
-        for module in self.mean_estimators[ae_idx]:
-            if hasattr(module, 'out_features'):
-                enc_out_features = module.out_features
-        return enc_out_features
-
-    def encode(self, x, ae_idx=None):
-        mean = x
-        log_var = x
-        if ae_idx is None:
-            for i in range(self.num_trained_blocks):
-                x = self.encoders[i](x)
-                mean = self.mean_estimators[i](x)
-                log_var = self.log_var_estimators[i](x)
-                x = self.sample_latent_vector(mean, log_var)
-        else:
-            x = self.encoders[ae_idx](x)
-            mean = self.mean_estimators[ae_idx](x)
-            log_var = self.log_var_estimators[ae_idx](x)
-            x = self.sample_latent_vector(mean, log_var)
+    def encode(self, x):
+        x = self.encoder(x)
+        mean = self.mean_estimator(x)
+        log_var = self.log_var_estimator(x)
+        x = self.sample_latent_vector(mean, log_var)
         return x, mean, log_var
 
     @staticmethod
@@ -316,6 +82,9 @@ class SVAE(SAE):
         stdev = torch.exp(0.5 * log_var)
         epsilon = torch.randn_like(stdev)
         return mean + stdev * epsilon  # sampled latent vector
+
+    def decode(self, x):
+        return self.decoder(x)
 
 
 class VAELoss(nn.Module):
@@ -338,53 +107,3 @@ class VAELoss(nn.Module):
         kl_div = torch.mean(kl_div) if self.reduction == 'mean' else torch.sum(kl_div)
 
         return reconstruction_loss + kl_div
-
-
-class MNISTSVAE(SVAE):
-    """MNIST stacked variational autoencoder."""
-
-    def __init__(self):
-        super(MNISTSVAE, self).__init__()
-
-        self.encoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(in_features=28*28, out_features=500),
-                nn.ReLU(),
-            ),
-            nn.Sequential(
-                nn.Linear(in_features=50, out_features=25),
-                nn.ReLU(),
-            ),
-        ])
-        self.mean_estimators = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(in_features=500, out_features=50),
-                nn.Sigmoid(),
-            ),
-            nn.Sequential(
-                nn.Linear(in_features=25, out_features=10),
-            ),
-        ])
-        self.log_var_estimators = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(in_features=500, out_features=50),
-                nn.Sigmoid(),
-            ),
-            nn.Sequential(
-                nn.Linear(in_features=25, out_features=10),
-            ),
-        ])
-        self.decoders = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(in_features=10, out_features=25),
-                nn.ReLU(),
-                nn.Linear(in_features=25, out_features=50),
-                nn.Sigmoid(),
-            ),
-            nn.Sequential(
-                nn.Linear(in_features=50, out_features=500),
-                nn.ReLU(),
-                nn.Linear(in_features=500, out_features=28*28),
-                nn.Sigmoid(),
-            ),
-        ])
