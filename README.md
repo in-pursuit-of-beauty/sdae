@@ -1,3 +1,5 @@
+# SDAE: ML4ART FORK
+
 ### Setup
 
 Install [PyTorch](https://pytorch.org/get-started/locally/), NumPy, and
@@ -6,27 +8,33 @@ Install [PyTorch](https://pytorch.org/get-started/locally/), NumPy, and
 pip install -r requirements.txt
 ```
 
-There are two datasets you'll need to download manually (see below).
+There is one dataset you'll need to download manually (see below).
 I suggest you create a `data` folder and unpack the relevant files into it.
-Later, you will be able to specify the dataset paths as command line arguments.
+Later, you will be able to specify the dataset path as a command line argument.
 
 <table>
   <tr>
-    <td>Olshausen</td>
-    <td><a href="http://www.rctn.org/bruno/sparsenet">Link</a></td>
-  </tr>
-  <tr>
-    <td>CUB-200-2011</td>
-    <td><a href="http://www.vision.caltech.edu/visipedia/CUB-200-2011.html">Link</a></td>
+    <td>RESISC45</td>
+    <td><a href="http://www.escience.cn/people/JunweiHan/NWPU-RESISC45.html">Link</a></td>
   </tr>
 </table>
 
-### [Experiments](https://owenjow.xyz/sdae/report.pdf)
+### Usage
 
-You can run one of the provided experiment scripts using the command
-`./experiments/xx.sh`, where `xx` is the experiment number (e.g. `01`).
-I have included a brief experiment description at the top of each script.
-You will need to change arguments such as `olshausen_path` and `cub_folder` which refer to dataset paths.
+Train the denoising variational autoencoder:
+```
+python3 sdae.py \
+    --batch_size 128 \
+    --learning_rate 0.001 \
+    --num_epochs 50 \
+    --model_class MNISTSVAE \
+    --dataset_key resisc \
+    --noise_type gs \
+    --gaussian_stdev 0.4 \
+    --save_path ./ckpt/sdvae.pth \
+    --weight_decay 0.0000001 \
+    --vae_reconstruction_loss_type bce
+```
 
 ### Associated Visuals
 
