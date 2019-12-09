@@ -1,4 +1,4 @@
-# SDAE - ML4ART FORK
+# SDAE / ML4ART FORK
 
 ### Setup
 
@@ -15,16 +15,15 @@ and place it in the `data` folder. The final path should be `sdae/data/NWPU-RESI
 
 Train the denoising variational autoencoder:
 ```
-python3 train.py \
-    --batch_size 32 \
-    --learning_rate 0.001 \
-    --num_epochs 50 \
-    --model_class CVAE \
-    --dataset_key resisc \
-    --noise_type gs \
-    --gaussian_stdev 0.4 \
-    --save_path ./ckpt/cvae.pth \
-    --weight_decay 0.0000001
+python3 train.py --batch_size 32 \
+                 --learning_rate 0.001 \
+                 --num_epochs 50 \
+                 --model_class CVAE \
+                 --dataset_key resisc \
+                 --noise_type gs \
+                 --gaussian_stdev 0.4 \
+                 --save_path ./ckpt/cvae.pth \
+                 --weight_decay 0.0000001
 ```
 
 ### Associated Visuals

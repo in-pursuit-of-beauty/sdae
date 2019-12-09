@@ -26,7 +26,7 @@ if __name__ == '__main__':
     parser.add_argument('--restore_path', type=str, default=None)
     parser.add_argument('--save_path', type=str, default='./model.pth')
     parser.add_argument('--log_freq', type=int, default=10)
-    parser.add_argument('--dataset_path', type=str, default='NWPU-RESISC45')
+    parser.add_argument('--dataset_path', type=str, default='data/NWPU-RESISC45')
     parser.add_argument('--weight_decay', type=float, default=0)
 
     args = parser.parse_args()
