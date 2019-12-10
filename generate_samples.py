@@ -1,4 +1,6 @@
+import os
 import torch
+import imageio
 import modules
 import argparse
 import numpy as np
@@ -6,7 +8,7 @@ import matplotlib.pyplot as plt
 from utils import init_model, init_data_loader
 
 
-def plot_samples(samples, fig_save_path=None):
+def plot_samples(samples, fig_save_path):
     """Given a tensor of samples
     [of shape (num_originals, num_variations+1, sh, sw)]
     corresponding to Figure 15 from the 2010 SDAE paper,
@@ -26,13 +28,13 @@ def plot_samples(samples, fig_save_path=None):
     if fig_save_path is not None:
         fig.savefig(fig_save_path)
         print('[o] saved figure to %s' % fig_save_path)
-    plt.show()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_class', type=str, default='CVAE')
     parser.add_argument('--restore_path', type=str, default=None)
+    parser.add_argument('--out_dir', type=str, default=None)
     parser.add_argument('--fig_save_path', type=str, default=None)
     parser.add_argument('--num', type=int, default=10)
     parser.add_argument('--sample_h', type=int, default=256)
@@ -53,6 +55,7 @@ if __name__ == '__main__':
     sample_h      = args.sample_h
     sample_w      = args.sample_w
     fig_save_path = args.fig_save_path
+    out_dir       = args.out_dir
 
     # generate samples
     with torch.no_grad():
@@ -75,4 +78,13 @@ if __name__ == '__main__':
             latent_vecs = latent_vecs.cuda()
         samples = model.decode(latent_vecs)  # shape: (n*n, sample_h*sample_w)
         samples = samples.view(num, num, sample_h, sample_w)
-        plot_samples(samples.cpu().numpy(), fig_save_path)
+        samples = samples.cpu().numpy()
+        if out_dir:
+            # save NUM samples to `out_dir`
+            for i in range(num):
+                out_path = os.path.join(out_dir, str(i).zfill(3) + '.png')
+                imageio.imwrite(out_path,
+                    (np.clip(samples[i, i], 0, 1) * 255).astype(np.uint8))
+                print('Wrote `%s`.' % out_path)
+        if fig_save_path:
+            plot_samples(samples, fig_save_path)
