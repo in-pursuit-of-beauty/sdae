@@ -36,11 +36,11 @@ class CVAE(nn.Module):
         # shape: (batch, 1, 256, 256)
         self.encoder = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=2, padding=0),
-            nn.ReLU(),  # shape: (batch, 16, 124, 124)
+            nn.ReLU(),  # shape: (batch, 16, 126, 126)
             nn.Conv2d(in_channels=16, out_channels=32, kernel_size=5, stride=2, padding=0),
-            nn.ReLU(),  # shape: (batch, 32, 58, 58)
-            Flatten(),  # shape: (batch, 32 * 58 * 58)
-            nn.Linear(32 * 58 * 58, latent_dim * 2),
+            nn.ReLU(),  # shape: (batch, 32, 61, 61)
+            Flatten(),  # shape: (batch, 32 * 61 * 61)
+            nn.Linear(32 * 61 * 61, latent_dim * 2),
         )
         self.mean_estimator = nn.Linear(
             in_features=latent_dim*2, out_features=latent_dim)
@@ -51,11 +51,11 @@ class CVAE(nn.Module):
             nn.Linear(latent_dim, 16 * 64 * 64),
             nn.ReLU(),
             Reshape(16, 64, 64),
-            nn.ConvTranspose2d(in_channels=16, out_channels=16, kernel_size=5, stride=2, padding=0),
-            nn.ReLU(),  # shape: (batch, 16, 128, 128)
-            nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=5, stride=2, padding=0),
-            nn.ReLU(),  # shape: (batch, 8, 256, 256)
-            nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=5, stride=1, padding=0),
+            nn.ConvTranspose2d(in_channels=16, out_channels=16, kernel_size=5, stride=2, padding=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=16, out_channels=8, kernel_size=5, stride=2, padding=2),
+            nn.ReLU(),
+            nn.ConvTranspose2d(in_channels=8, out_channels=1, kernel_size=6, stride=1, padding=1),
             nn.Sigmoid(),
         )
         # shape: (batch, 1, 256, 256)

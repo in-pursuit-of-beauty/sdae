@@ -56,6 +56,10 @@ if __name__ == '__main__':
     if not os.path.exists('./03_output'):
         os.makedirs('./03_output')
 
+    save_dir = os.path.dirname(save_path)
+    if save_dir and not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
     # set up model and criterion
     model = init_model(model_class, restore_path, restore_required=False, latent_dim=512)
     criterion = init_loss('vae', reconstruction_loss_type='mse')

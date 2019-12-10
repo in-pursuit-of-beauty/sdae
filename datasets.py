@@ -17,15 +17,19 @@ class RESISC45Dataset(data.Dataset):
 
         paths = []
         for image_type in os.listdir(resisc_folder):
-            image_type_folder = os.path.join(resisc_folder, image_type)
-            for fname in os.listdir(image_type_folder):
-                paths.append(os.path.join(image_type_folder, fname))
+            if image_type == 'medium_residential':
+                # only use "medium residential" for now
+                image_type_folder = os.path.join(resisc_folder, image_type)
+                for fname in os.listdir(image_type_folder):
+                    paths.append(os.path.join(image_type_folder, fname))
+        print('Registered %s images in dataset.' % len(paths))
 
         print('==> Reading images...')
         self.images = []
         for path in paths:
             image = imageio.imread(path, as_gray=True)
             image = (image - image.min()) / (image.max() - image.min())
+            image = np.expand_dims(image, 0)  # reshape to (c, h, w)
             self.images.append(image)
         self.images = np.array(self.images)
         print('Done reading images.')
