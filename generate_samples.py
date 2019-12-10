@@ -44,7 +44,7 @@ if __name__ == '__main__':
     print(args)
     print('----------')
 
-    model = init_model(args.model_class, args.restore_path, restore_required=True)
+    model = init_model(args.model_class, args.restore_path, restore_required=True, latent_dim=512)
     model.eval()
 
     lower         = args.lower

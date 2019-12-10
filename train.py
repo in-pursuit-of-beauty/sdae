@@ -57,7 +57,7 @@ if __name__ == '__main__':
         os.makedirs('./03_output')
 
     # set up model and criterion
-    model = init_model(model_class, restore_path, restore_required=False)
+    model = init_model(model_class, restore_path, restore_required=False, latent_dim=512)
     criterion = init_loss('vae', reconstruction_loss_type='mse')
 
     # load data

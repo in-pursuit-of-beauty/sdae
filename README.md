@@ -23,7 +23,8 @@ python3 train.py --batch_size 32 \
                  --noise_type gs \
                  --gaussian_stdev 0.4 \
                  --save_path ./ckpt/cvae.pth \
-                 --weight_decay 0.0000001
+                 --weight_decay 0.0000001 \
+                 --dataset_path data/NWPU-RESISC45
 ```
 
 ### Associated Visuals
