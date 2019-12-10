@@ -17,7 +17,7 @@ Train the denoising variational autoencoder:
 ```
 python3 train.py --batch_size 32 \
                  --learning_rate 0.001 \
-                 --num_epochs 500 \
+                 --num_epochs 5000 \
                  --model_class CVAE \
                  --dataset_key resisc \
                  --noise_type gs \
@@ -25,6 +25,16 @@ python3 train.py --batch_size 32 \
                  --save_path ./ckpt/cvae.pth \
                  --weight_decay 0.0000001 \
                  --dataset_path data/NWPU-RESISC45
+```
+
+Generate samples using the trained model:
+```
+python3 generate_samples.py --model_class CVAE \
+                            --restore_path ./ckpt/cvae.pth \
+                            --num 10 \
+                            --sample_h 256 \
+                            --sample_w 256 \
+                            --out_dir samples
 ```
 
 ### Associated Visuals
