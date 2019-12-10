@@ -30,6 +30,41 @@ def plot_samples(samples, fig_save_path):
         print('[o] saved figure to %s' % fig_save_path)
 
 
+def encode_image(model, image_path):
+    image_tensor = load_image_as_tensor(image_path)
+    encoding, _, _ = model.encode(image_tensor)
+    return np.squeeze(encoding.cpu().numpy())  # shape: (latent_dim,)
+
+
+def generate_from_latent_vecs(model, latent_vecs):
+    # Run generator.
+    # `latent_vecs` should be a NumPy array of shape (batch, latent_dim).
+    latent_vecs = torch.from_numpy(latent_vecs).float()
+    if torch.cuda.is_available():
+        latent_vecs = latent_vecs.cuda()
+    samples = model.decode(latent_vecs)
+    return samples.cpu().numpy()  # shape: (batch, sample_h*sample_w)
+
+
+def load_image_as_tensor(image_path):
+    image = imageio.imread(image_path, as_gray=True)
+    while len(image.shape) < 4:
+        image = np.expand_dims(image, 0)
+    if image.max() > 1:
+        image /= 255.0
+    image = torch.from_numpy(image).float()
+    if torch.cuda.is_available():
+        image = image.cuda()
+    return image
+
+
+def autoencode_image(model, image_path, sample_h, sample_w):
+    latent_vecs = encode_image(model, image_path)
+    latent_vecs = np.expand_dims(latent_vecs, 0)
+    image = generate_from_latent_vecs(model, latent_vecs)
+    return image[0].reshape(sample_h, sample_w)  # (h, w)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_class', type=str, default='CVAE')
@@ -41,12 +76,15 @@ if __name__ == '__main__':
     parser.add_argument('--sample_w', type=int, default=256)
     parser.add_argument('--lower', type=float, default=-3)
     parser.add_argument('--upper', type=float, default=3)
+    parser.add_argument('--starter_im1_path', type=str)
+    parser.add_argument('--starter_im2_path', type=str)
 
     args = parser.parse_args()
     print(args)
     print('----------')
 
-    model = init_model(args.model_class, args.restore_path, restore_required=True, latent_dim=512)
+    latent_dim = 512
+    model = init_model(args.model_class, args.restore_path, restore_required=True, latent_dim=latent_dim)
     model.eval()
 
     lower         = args.lower
@@ -57,34 +95,53 @@ if __name__ == '__main__':
     fig_save_path = args.fig_save_path
     out_dir       = args.out_dir
 
+    starter_im1_path = args.starter_im1_path
+    starter_im2_path = args.starter_im2_path
+
     # generate samples
     with torch.no_grad():
-        # vary first two dims over grid
-        dim0_vals = np.linspace(lower, upper, num)
-        dim1_vals = np.linspace(lower, upper, num)
-        dim0_vals, dim1_vals = np.meshgrid(dim0_vals, dim1_vals)
-        latent_vecs = np.stack((dim0_vals, dim1_vals), axis=-1).reshape(-1, 2)
-
-        latent_dim = model.latent_dim
-        if latent_dim > 2:
-            # keep values for other dimensions fixed
-            other_vals = np.random.randn(latent_dim - 2)
-            other_vals = np.expand_dims(other_vals, axis=0)  # shape: (1, ld-2)
-            other_vals = np.tile(other_vals, (num * num, 1))  # shape: (n*n, ld-2)
-            latent_vecs = np.concatenate((latent_vecs, other_vals), axis=1)  # shape: (n*n, ld)
-
-        latent_vecs = torch.from_numpy(latent_vecs).float()
-        if torch.cuda.is_available():
-            latent_vecs = latent_vecs.cuda()
-        samples = model.decode(latent_vecs)  # shape: (n*n, sample_h*sample_w)
-        samples = samples.view(num, num, sample_h, sample_w)
-        samples = samples.cpu().numpy()
         if out_dir:
             # save NUM samples to `out_dir`
+            # first, generate latent vectors
+            encoding1, encoding2 = None, None
+            if starter_im1_path:
+                encoding1 = encode_image(model, starter_im1_path)
+            if starter_im2_path:
+                encoding2 = encode_image(model, starter_im2_path)
+            if encoding1 is not None and encoding2 is not None:
+                # create latent vectors by interpolating between the encodings
+                latent_vecs = np.array(
+                    [(1.0 - w) * encoding1 + w * encoding2 for w in np.linspace(0, 1, num)])
+            else:
+                latent_vecs = np.random.normal(size=(num, latent_dim))  # shape: (n, latent)
+                if encoding1 is not None:
+                    # create latent vectors as random perturbations of the encoding
+                    latent_vecs += np.expand_dims(encoding1, 0)
+
+            # next, generate samples from latent vectors
+            samples = generate_from_latent_vecs(model, latent_vecs)
+            samples = samples.reshape(num, sample_h, sample_w)
             for i in range(num):
                 out_path = os.path.join(out_dir, str(i).zfill(3) + '.png')
                 imageio.imwrite(out_path,
-                    (np.clip(samples[i, i], 0, 1) * 255).astype(np.uint8))
+                    (np.clip(samples[i], 0, 1) * 255).astype(np.uint8))
                 print('Wrote `%s`.' % out_path)
+
         if fig_save_path:
+            # vary first two dims over grid
+            num = max(int(np.sqrt(num)), 1)
+            dim0_vals = np.linspace(lower, upper, num)
+            dim1_vals = np.linspace(lower, upper, num)
+            dim0_vals, dim1_vals = np.meshgrid(dim0_vals, dim1_vals)
+            latent_vecs = np.stack((dim0_vals, dim1_vals), axis=-1).reshape(-1, 2)
+
+            if latent_dim > 2:
+                # keep values for other dimensions fixed
+                other_vals = np.random.randn(latent_dim - 2)
+                other_vals = np.expand_dims(other_vals, axis=0)  # shape: (1, latent-2)
+                other_vals = np.tile(other_vals, (num * num, 1))  # shape: (n*n, latent-2)
+                latent_vecs = np.concatenate((latent_vecs, other_vals), axis=1)  # shape: (n*n, latent)
+
+            samples = generate_from_latent_vecs(model, latent_vecs)  # shape: (n*n, sample_h*sample_w)
+            samples = samples.reshape(num, num, sample_h, sample_w)
             plot_samples(samples, fig_save_path)
